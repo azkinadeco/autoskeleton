@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Offline 2D Character Auto-Rigging & Sprite Sheet Animator",
   "scripts": {
+    "build": "node build.js",
     "start": "node server.js"
   }
 }

@@ -5055,9 +5055,7 @@ const TIER_COST = { turbo: 5, pro: 15, max: 35 };
 const KINDS = ['idle', 'walk', 'run', 'attack', 'jump', 'death'];
 
 function apiBase() {
-  const h = location.hostname;
-  const local = location.protocol.startsWith('http') && (h === '127.0.0.1' || h === 'localhost');
-  return local ? '/api/as' : 'https://www.autosprite.io/api/v1';
+  return location.protocol.startsWith('http') ? '/api/as' : 'https://www.autosprite.io/api/v1';
 }
 function initCloud({ getSpriteBlob, getName }) {
   const $ = (id) => document.getElementById(id);
