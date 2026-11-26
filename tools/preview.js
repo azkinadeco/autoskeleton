@@ -98,6 +98,31 @@ globalThis.document = { createElement: () => new Canvas() };
         if (wl.canvas.data[i+3] > 8) bl(x, y, wl.canvas.data[i], wl.canvas.data[i+1], wl.canvas.data[i+2], wl.canvas.data[i+3]);
       }
     }
+    // Draw slash FX crescent & impact sparks in software preview
+    if (mesh.fx) {
+      const fx = mesh.fx;
+      const ct = Math.cos(fx.tilt || 0), st = Math.sin(fx.tilt || 0);
+      const rx = fx.r * 1.04, ry = (fx.ry || fx.r * 0.78) * 1.04;
+      const steps = 260;
+      for (let sIdx = 0; sIdx <= steps; sIdx++) {
+        const u = sIdx / steps;
+        const ang = fx.lead - fx.trail * (1 - u);
+        const taper = Math.sin(Math.pow(u, 0.75) * Math.PI);
+        const th = 0.28 * Math.pow(Math.max(0, taper), 0.85);
+        for (let rStep = 0; rStep <= 24; rStep++) {
+          const v = rStep / 24;
+          const sc = 1 - th * v;
+          const lx = Math.cos(ang) * rx * sc, ly = Math.sin(ang) * ry * sc;
+          const px = Math.round(fx.cx + lx * ct - ly * st);
+          const py = Math.round(fx.cy + lx * st + ly * ct);
+          const isCore = v < 0.24 || (v > 0.72 && v < 0.84);
+          const al = Math.round(235 * fx.alpha * (1 - v * 0.45));
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            bl(px + dx, py + dy, 255, isCore ? 250 : 95, isCore ? 255 : 165, al);
+          }
+        }
+      }
+    }
     for (const j of Object.values(fk.posedJoints)) for (let dy=-3;dy<=3;dy++) for (let dx=-3;dx<=3;dx++) bl(Math.round(j.x)+dx, Math.round(j.y)+dy, 255, 255, 0, 255);
   };
   frames.forEach((t, i) => drawFrame(t, i));

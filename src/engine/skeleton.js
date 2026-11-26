@@ -598,6 +598,7 @@ export function solveForwardKinematics(skeleton, pose = {}) {
   const rootScale = pose.rootScale || { x: 1, y: 1 };
   const rotations = pose.rotations || {};
   const offsets = pose.offsets || {};
+  const boneScales = pose.boneScales || {};
 
   const anchorX = skeleton.centerX || (skeleton.bounds.minX + skeleton.bounds.maxX) * 0.5;
   const anchorY = skeleton.bounds ? skeleton.bounds.maxY : joints[0].y;
@@ -660,10 +661,13 @@ export function solveForwardKinematics(skeleton, pose = {}) {
     const pBind = byId[jt.parent];
     const pPosed = posedJoints[jt.parent];
     const extraOff = pose.partOffsets?.[jt.parent] || { x: 0, y: 0 };
+    const bScale = boneScales[jt.parent] || { x: 1, y: 1 };
 
     const angle = pPosed.worldAngle;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
+    const sx = rootScale.x * (bScale.x ?? 1);
+    const sy = rootScale.y * (bScale.y ?? 1);
 
     boneTransforms.push({
       id: jt.id,
@@ -672,15 +676,21 @@ export function solveForwardKinematics(skeleton, pose = {}) {
       pBindY: pBind.y,
       pPosedX: pPosed.x + extraOff.x,
       pPosedY: pPosed.y + extraOff.y,
-      m00: cos * rootScale.x,
-      m01: -sin * rootScale.y,
-      m10: sin * rootScale.x,
-      m11: cos * rootScale.y,
+      m00: cos * sx,
+      m01: -sin * sy,
+      m10: sin * sx,
+      m11: cos * sy,
     });
   }
 
+  const bh = skeleton.bounds?.height || 200;
   boneTransforms.sway = pose.sway
-    ? { phase: pose.sway.phase, amp: pose.sway.amp * (skeleton.bounds?.height || 200) }
+    ? {
+        phase: pose.sway.phase,
+        amp: (pose.sway.amp || 0) * bh,
+        windX: (pose.sway.windX || 0) * bh,
+        windY: (pose.sway.windY || 0) * bh,
+      }
     : null;
   const fx = computeSlashFX(skeleton, posedJoints, pose);
   boneTransforms.fx = fx;

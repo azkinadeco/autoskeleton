@@ -19,6 +19,7 @@ import {
   AETHERIA_SVEN_DATA,
   AETHERIA_KALI_DATA,
   AETHERIA_YMIR_DATA,
+  AETHERIA_CHARLOTTE_DATA,
 } from './utils/aetheriaPresets.js';
 import {
   RIG_TEMPLATES,
@@ -42,12 +43,14 @@ import { drawOverlay } from './engine/renderer.js';
 import {
   ANIMATION_LIST,
   evaluateAnimation,
+  parseCustomActionPrompt,
 } from './engine/animations.js';
 import {
   generateSpriteSheet,
   downloadCanvasPNG,
   downloadJSON,
   exportAnimationWebM,
+  exportAnimationGIF,
 } from './engine/exporter.js';
 import { PlaytestArena } from './ui/playtest.js';
 import { initCloud } from './ui/cloud.js';
@@ -82,10 +85,13 @@ const state = {
   mirrorRig: false,
   showSkeleton: true,
   showHitboxes: false,
+  showVfx: true,
+  onionSkin: false,
+  slashColor: '',
   flipX: false,
   showRefBox: true,
 
-  activeAnim: 'run',
+  activeAnim: 'combo',
   playing: true,
   phase: 0,
   speed: 1.0,
@@ -158,7 +164,14 @@ const el = {
   chkPixelArt: document.getElementById('chkPixelArt'),
   chkShowSkeleton: document.getElementById('chkShowSkeleton'),
   chkShowHitboxes: document.getElementById('chkShowHitboxes'),
+  chkShowVfx: document.getElementById('chkShowVfx'),
+  chkOnionSkin: document.getElementById('chkOnionSkin'),
   chkFlipX: document.getElementById('chkFlipX'),
+
+  inpCustomPrompt: document.getElementById('inpCustomPrompt'),
+  btnApplyPrompt: document.getElementById('btnApplyPrompt'),
+  selSlashColor: document.getElementById('selSlashColor'),
+  frameStripBar: document.getElementById('frameStripBar'),
 
   animGrid: document.getElementById('animGrid'),
   btnPlayPause: document.getElementById('btnPlayPause'),
@@ -184,6 +197,7 @@ const el = {
   selFrameSize: document.getElementById('selFrameSize'),
   selFrameCount: document.getElementById('selFrameCount'),
   selEngineFormat: document.getElementById('selEngineFormat'),
+  btnDownloadGif: document.getElementById('btnDownloadGif'),
   btnDownloadWebm: document.getElementById('btnDownloadWebm'),
   btnDownloadJson: document.getElementById('btnDownloadJson'),
   btnDownloadPng: document.getElementById('btnDownloadPng'),
@@ -352,7 +366,20 @@ function syncPlaytestCharacter() {
 
 // ---- Built-in Aetheria Online & Contoh Presets ----
 function loadPresetCharacter(presetKey) {
-  if (presetKey === 'sven') {
+  if (presetKey === 'charlotte') {
+    const img = new Image();
+    img.onload = () => {
+      loadRawCanvas(imageToCanvas(img, 420), {
+        suggestedName: 'bloody_charlotte',
+        preserveExactFrame: false,
+        templateId: 'auto_smart',
+        viewDirection: 'front',
+        renderMode: 'hybrid_mesh',
+        pixelArt: false,
+      });
+    };
+    img.src = AETHERIA_CHARLOTTE_DATA;
+  } else if (presetKey === 'sven') {
     const img = new Image();
     img.onload = () => {
       loadRawCanvas(imageToCanvas(img, 420), {
@@ -720,6 +747,7 @@ function setMode(newMode) {
   el.videoSheetView?.classList.toggle('hidden', !isVideoSheet);
   el.playtestControls.classList.toggle('hidden', !isPlaytest);
   el.timelineBar.classList.toggle('hidden', isPlaytest || isMultiGrid || isVideoSheet);
+  el.frameStripBar?.classList.toggle('hidden', isPlaytest || isMultiGrid || isVideoSheet);
 
   if (isVideoSheet) {
     el.viewportHint.textContent = 'Drop video MP4/WebM (Wan / LTX / Kling / ComfyUI) → PNG Sprite Sheet + JSON otomatis';
@@ -1012,9 +1040,64 @@ el.chkShowSkeleton.addEventListener('change', () => {
 el.chkShowHitboxes?.addEventListener('change', () => {
   state.showHitboxes = el.chkShowHitboxes.checked;
 });
+el.chkShowVfx?.addEventListener('change', () => {
+  state.showVfx = el.chkShowVfx.checked;
+});
+el.chkOnionSkin?.addEventListener('change', () => {
+  state.onionSkin = el.chkOnionSkin.checked;
+});
 el.chkFlipX.addEventListener('change', () => {
   state.flipX = el.chkFlipX.checked;
 });
+
+el.selSlashColor?.addEventListener('change', () => {
+  state.slashColor = el.selSlashColor.value;
+});
+
+function applyCustomActionPrompt() {
+  if (!el.inpCustomPrompt) return;
+  const res = parseCustomActionPrompt(el.inpCustomPrompt.value);
+  state.activeAnim = res.animId;
+  state.phase = 0;
+  if (res.slashColor !== null) {
+    state.slashColor = res.slashColor;
+    if (el.selSlashColor) el.selSlashColor.value = res.slashColor;
+  }
+  state.speed = res.speed;
+  if (el.rngSpeed) el.rngSpeed.value = String(res.speed);
+  if (el.valSpeed) el.valSpeed.textContent = `${res.speed.toFixed(2)}x`;
+  state.intensity = res.intensity;
+  if (el.rngIntensity) el.rngIntensity.value = String(res.intensity);
+  if (el.valIntensity) el.valIntensity.textContent = `${Math.round(res.intensity * 100)}%`;
+  buildAnimationButtons();
+  buildFrameStripBar();
+  if (state.mode !== 'animate') setMode('animate');
+}
+
+el.btnApplyPrompt?.addEventListener('click', applyCustomActionPrompt);
+el.inpCustomPrompt?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') applyCustomActionPrompt();
+});
+
+function buildFrameStripBar() {
+  if (!el.frameStripBar) return;
+  el.frameStripBar.innerHTML = '';
+  const animDef = ANIMATION_LIST.find((a) => a.id === state.activeAnim) || ANIMATION_LIST[0];
+  const count = animDef.defaultFrames || 8;
+  for (let i = 0; i < count; i++) {
+    const pill = document.createElement('button');
+    pill.className = 'frame-pill' + (i === 0 ? ' active' : '');
+    pill.textContent = String(i + 1);
+    pill.title = `Lompat ke Frame ${i + 1} / ${count}`;
+    pill.addEventListener('click', () => {
+      state.playing = false;
+      el.btnPlayPause.textContent = '▶ Play';
+      state.phase = i / count;
+      el.rngTimeline.value = String(Math.round(state.phase * 1000));
+    });
+    el.frameStripBar.appendChild(pill);
+  }
+}
 
 function buildAnimationButtons() {
   el.animGrid.innerHTML = '';
@@ -1028,6 +1111,7 @@ function buildAnimationButtons() {
       if (state.mode === 'rig' || state.mode === 'multigrid') setMode('animate');
       el.animGrid.querySelectorAll('.anim-btn').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
+      buildFrameStripBar();
     });
     el.animGrid.appendChild(btn);
   }
@@ -1107,6 +1191,8 @@ function buildExportPreview() {
     pixelArt: state.pixelArt,
     intensity: state.intensity,
     squash: state.squash,
+    showVfx: state.showVfx,
+    slashColor: state.slashColor || null,
     characterName: charName,
     engineFormat,
   });
@@ -1166,6 +1252,31 @@ el.btnDownloadJson.addEventListener('click', () => {
     const jsonName = state.lastExport.imageFileName.replace(/\.png$/, '.json');
     downloadJSON(state.lastExport.metadata, jsonName);
   }
+});
+
+el.btnDownloadGif?.addEventListener('click', () => {
+  if (!state.processedCanvas || !state.skeleton) return;
+  const charName = el.inpCharName.value.trim() || 'aetheria_hero';
+  const animDef = ANIMATION_LIST.find((a) => a.id === state.activeAnim) || ANIMATION_LIST[0];
+  exportAnimationGIF({
+    imageCanvas: state.processedCanvas,
+    partLayers: state.partLayers,
+    mesh: state.mesh,
+    skeleton: state.skeleton,
+    renderMode: state.renderMode,
+    animId: state.activeAnim,
+    frameSize: Number(el.selFrameSize.value) || 256,
+    frameCount: Number(el.selFrameCount.value) || animDef.defaultFrames || 25,
+    fps: animDef.defaultFps || 14,
+    speed: state.speed,
+    flipX: state.flipX,
+    pixelArt: state.pixelArt,
+    intensity: state.intensity,
+    squash: state.squash,
+    showVfx: state.showVfx,
+    slashColor: state.slashColor || null,
+    filename: `${charName}_${state.activeAnim}.gif`,
+  });
 });
 
 el.btnDownloadWebm?.addEventListener('click', async () => {
@@ -1319,14 +1430,50 @@ function tick(now) {
 
       const frameIdx = Math.min(animDef.defaultFrames, Math.floor(state.phase * animDef.defaultFrames) + 1);
       el.lblFrameInfo.textContent = `${frameIdx} / ${animDef.defaultFrames}`;
+      if (el.frameStripBar) {
+        const pills = el.frameStripBar.children;
+        for (let i = 0; i < pills.length; i++) {
+          pills[i].classList.toggle('active', i === frameIdx - 1);
+        }
+      }
+
+      // Optional Onion Skinning (ghost of previous frame)
+      if (state.onionSkin && state.explodeAmount < 0.02) {
+        const prevPhase = (state.phase - 1 / Math.max(4, animDef.defaultFrames) + 1) % 1;
+        const prevPose = evaluateAnimation(state.activeAnim, prevPhase, state.skeleton, {
+          intensity: state.intensity,
+          squash: state.squash,
+          slashColor: state.slashColor || null,
+        });
+        const prevFk = solveForwardKinematics(state.skeleton, prevPose);
+        charCtx.save();
+        charCtx.globalAlpha = 0.24;
+        const ghostView = { ...view, flash: 0, showVfx: false };
+        if (state.renderMode === 'hybrid_mesh' && state.mesh) {
+          deformMesh(state.mesh, prevFk.boneTransforms);
+          renderDeformedMesh2D(charCtx, state.processedCanvas, state.mesh, ghostView, state.pixelArt);
+        } else {
+          renderCutoutCharacter(charCtx, el.charCanvas.width, el.charCanvas.height, {
+            partLayers: state.partLayers,
+            skeleton: state.skeleton,
+            posedJoints: prevFk.posedJoints,
+            pose: prevPose,
+            view: ghostView,
+            pixelArt: state.pixelArt,
+            explodeAmount: 0,
+          });
+        }
+        charCtx.restore();
+      }
 
       const pose = evaluateAnimation(state.activeAnim, state.phase, state.skeleton, {
         intensity: state.intensity,
         squash: state.squash,
+        slashColor: state.slashColor || null,
       });
       const { posedJoints, boneTransforms } = solveForwardKinematics(state.skeleton, pose);
 
-      const renderView = { ...view, flash: pose.flash || 0 };
+      const renderView = { ...view, flash: pose.flash || 0, showVfx: state.showVfx };
 
       // When Explode > 0, show the separated cutout layers; otherwise use selected renderMode!
       if (state.renderMode === 'hybrid_mesh' && state.mesh && state.explodeAmount < 0.02) {
@@ -1378,10 +1525,12 @@ initCloud({
     if (!state.processedCanvas) return resolve(null);
     state.processedCanvas.toBlob(resolve, 'image/png');
   }),
+  onOpenVideoSheet: () => setMode('videosheet'),
 });
 
-// ---- Boot with Aetheria Sven (Front View) by default! ----
+// ---- Boot with Bloody Charlotte (25-Frame AutoSprite Custom Combo Attack) by default! ----
 buildAnimationButtons();
+buildFrameStripBar();
 handleResize();
-loadPresetCharacter('sven');
+loadPresetCharacter('charlotte');
 requestAnimationFrame(tick);

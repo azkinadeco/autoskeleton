@@ -24,6 +24,7 @@
 
       <div class="topbar-actions">
         <select id="selPresetChar" title="Karakter contoh">
+          <option value="charlotte">Charlotte (Custom Attack)</option>
           <option value="sven">Sven (depan)</option>
           <option value="kali">Kali (depan)</option>
           <option value="ymir">Ymir (boss)</option>
@@ -149,17 +150,37 @@
           </div>
         </div>
 
+        <div class="frame-strip-bar" id="frameStripBar"></div>
         <div class="timeline-bar" id="timelineBar">
           <button class="btn btn-primary btn-sm" id="btnPlayPause">⏸ Pause</button>
           <div class="timeline-scrubber">
             <input type="range" id="rngTimeline" min="0" max="1000" value="0" />
           </div>
-          <span class="timeline-info" id="lblFrameInfo">1 / 8</span>
+          <span class="timeline-info" id="lblFrameInfo">1 / 25</span>
         </div>
       </section>
 
       <!-- Right: Animation -->
       <aside class="panel panel-right">
+        <section class="card">
+          <h3>Custom Action Prompt</h3>
+          <div class="btn-row" style="margin-bottom:6px">
+            <input type="text" id="inpCustomPrompt" value="bloody combo slash 25f" placeholder="cth: fire combo slash, ice cast..." />
+            <button class="btn btn-primary btn-sm" id="btnApplyPrompt" style="flex:0 0 auto">⚡ Buat</button>
+          </div>
+          <div class="field-group" style="margin-bottom:0">
+            <label for="selSlashColor">Warna Efek Tebasan (VFX)</label>
+            <select id="selSlashColor">
+              <option value="">Otomatis (Sesuai Senjata)</option>
+              <option value="#ff3b78">Pink Crimson (Bloody Charlotte)</option>
+              <option value="#38bdf8">Cyan Frost (Ice / Air)</option>
+              <option value="#facc15">Gold Thunder (Petir / Holy)</option>
+              <option value="#4ade80">Emerald Wind (Angin)</option>
+              <option value="#c084fc">Purple Void (Shadow)</option>
+            </select>
+          </div>
+        </section>
+
         <section class="card">
           <h3>Gerakan</h3>
           <div class="anim-grid" id="animGrid"></div>
@@ -184,6 +205,8 @@
             <input type="range" id="rngZoom" min="0.5" max="2.4" step="0.05" value="1.15" />
           </div>
           <div class="chip-grid">
+            <label class="toggle-label"><input type="checkbox" id="chkShowVfx" checked /><span>Efek Slash</span></label>
+            <label class="toggle-label"><input type="checkbox" id="chkOnionSkin" /><span>Onion skin</span></label>
             <label class="toggle-label"><input type="checkbox" id="chkShowSkeleton" checked /><span>Pin pivot</span></label>
             <label class="toggle-label"><input type="checkbox" id="chkShowHitboxes" /><span>Hitbox</span></label>
             <label class="toggle-label"><input type="checkbox" id="chkFlipX" /><span>Flip</span></label>
@@ -248,9 +271,10 @@
             <select id="selFrameCount">
               <option value="4">4</option>
               <option value="6">6</option>
-              <option value="8" selected>8</option>
+              <option value="8">8</option>
               <option value="12">12</option>
-              <option value="16">16</option>
+              <option value="16">16 (4×4 Grid)</option>
+              <option value="25" selected>25 (5×5 AutoSprite)</option>
             </select>
           </div>
           <div class="field-group">
@@ -279,7 +303,10 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" id="btnDownloadWebm">🎬 WebM</button>
+        <div class="footer-right">
+          <button class="btn btn-secondary" id="btnDownloadGif">🎞️ GIF</button>
+          <button class="btn btn-secondary" id="btnDownloadWebm">🎬 WebM</button>
+        </div>
         <div class="footer-right">
           <button class="btn btn-secondary" id="btnDownloadJson">JSON</button>
           <button class="btn btn-primary" id="btnDownloadPng">PNG Sheet</button>
@@ -319,6 +346,19 @@
           <button class="btn btn-accent btn-block" id="btnCloudGenerate" disabled>Generate</button>
           <div class="cloud-links" id="cloudLinks"></div>
           <pre class="code-box" id="cloudLog"></pre>
+        </div>
+        <div class="cloud-step">
+          <h3>4. AI Gratis & Lokal <span class="muted">(0 kredit AutoSprite)</span></h3>
+          <div class="btn-row" style="margin-bottom:6px">
+            <button class="btn btn-secondary btn-sm" id="btnFreeCheckComfy">🔌 Cek ComfyUI Lokal (8188)</button>
+            <button class="btn btn-secondary btn-sm" id="btnFreeGotoVideo">🎬 Buka Video → Sheet</button>
+          </div>
+          <div class="cloud-links">
+            <a href="https://huggingface.co/spaces/Wan-AI/Wan2.1" target="_blank" rel="noopener">Wan 2.1 I2V (Gratis)</a>
+            <a href="https://huggingface.co/spaces/Lightricks/LTX-Video-Playground" target="_blank" rel="noopener">LTX-Video (Gratis)</a>
+            <a href="https://huggingface.co/spaces/briaai/BRIA-RMBG-2.0" target="_blank" rel="noopener">RMBG-2.0 Hapus BG</a>
+          </div>
+          <div class="muted" id="lblFreeAiStatus">Generate video gratis di atas, lalu drop ke tab Video → Sheet untuk jadi Sprite Sheet otomatis.</div>
         </div>
         <div class="muted tips">💡 Hemat: pakai Turbo, pilih animasi seperlunya, test dulu di editor offline (gratis). Upload karakter tidak memakai kredit.</div>
       </div>

@@ -329,27 +329,45 @@ export function computeSkinWeights(mesh, canvas, skeleton, rigidity = 3.2, partM
       const wImg = wCtx.createImageData(w, h);
       const wData = wImg.data;
 
-      const radKeep = wb.radius * 1.58;
-      const radCut = wb.radius * 1.48;
+      const sjById = Object.fromEntries(skeleton.joints.map((j) => [j.id, j]));
+      const isRightSide = wb.id.endsWith('_r');
+      const hipJ = sjById[isRightSide ? 'hip_l' : 'hip_r'];
+      const kneeJ = sjById[isRightSide ? 'knee_l' : 'knee_r'];
+      const footJ = sjById[isRightSide ? 'foot_l' : 'foot_r'];
+
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const p = y * w + x;
           const a = sData[p * 4 + 3];
           if (a <= 12) continue;
           const pPart = partMap ? partMap[p] : 0;
-          const sd = segDist(x, y, wb.sx, wb.sy, wb.ex, wb.ey);
-          // Protect head (7) and torso (3), and protect legs only near the grip
+          // Always protect head (7) and upper torso (3)
           if (pPart === 7 || pPart === 3) continue;
-          if ((pPart === 1 || pPart === 2 || pPart === 4 || pPart === 5) && sd.t < 0.28) continue;
-          if (sd.dist <= radKeep && sd.t >= 0.02) {
-            const idx4 = p * 4;
-            wData[idx4] = sData[idx4];
-            wData[idx4 + 1] = sData[idx4 + 1];
-            wData[idx4 + 2] = sData[idx4 + 2];
-            wData[idx4 + 3] = a;
-            if (sd.dist <= radCut && sd.t >= 0.06) {
-              bodyImg.data[idx4 + 3] = 0;
-            }
+
+          const sd = segDist(x, y, wb.sx, wb.sy, wb.ex, wb.ey);
+          if (sd.t < -0.04) continue;
+          // Crossguard near hilt (t < 0.38) is wider than mid-blade
+          const guardFlare = 1 + 0.68 * Math.max(0, 1 - Math.max(0, sd.t) / 0.38);
+          const radKeep = wb.radius * 1.48 * guardFlare;
+          const radCut = wb.radius * 1.42 * guardFlare;
+          if (sd.dist > radKeep) continue;
+
+          // If pixel is near the leg, check whether it's closer to the leg bone spine or the weapon spine
+          if (hipJ && kneeJ && footJ && (pPart === 1 || pPart === 2 || pPart === 4 || pPart === 5)) {
+            const dThigh = segDist(x, y, hipJ.x, hipJ.y, kneeJ.x, kneeJ.y).dist;
+            const dShin = segDist(x, y, kneeJ.x, kneeJ.y, footJ.x, footJ.y).dist;
+            const dLeg = Math.min(dThigh, dShin);
+            // Keep actual leg core pixels on the body; let outer blade/crossguard pixels go to the weapon!
+            if (dLeg < sd.dist * 0.78 && dLeg < wb.radius * 0.82) continue;
+          }
+
+          const idx4 = p * 4;
+          wData[idx4] = sData[idx4];
+          wData[idx4 + 1] = sData[idx4 + 1];
+          wData[idx4 + 2] = sData[idx4 + 2];
+          wData[idx4 + 3] = a;
+          if (sd.dist <= radCut) {
+            bodyImg.data[idx4 + 3] = 0;
           }
         }
       }
@@ -409,6 +427,10 @@ export function computeSkinWeights(mesh, canvas, skeleton, rigidity = 3.2, partM
       }
       if (headBoneIdx !== -1 && b === headBoneIdx && pPart !== 7) {
         wVal *= 0.08;
+      }
+      // Prevent arm rotations from twisting back-hair / cape (part 6) across the face
+      if (pPart === 6 && (bones[b].parentId.startsWith('shoulder_') || bones[b].parentId.startsWith('elbow_'))) {
+        wVal *= 0.06;
       }
       if (weaponBoneSet.has(b)) wVal = 0;
       rawWeights[b] = wVal;
@@ -473,9 +495,11 @@ export function deformMesh(mesh, boneTransforms) {
       fy += (bt.pPosedY + bt.m10 * lx + bt.m11 * ly) * w;
     }
     if (sw && mesh.sway && mesh.sway[v] > 0.001) {
-      const k = mesh.sway[v] * sw.amp;
-      fx += Math.sin(sw.phase + vy * 0.05 + vx * 0.018) * k;
-      fy += Math.cos(sw.phase * 2 + vx * 0.04) * k * 0.3;
+      const wSway = mesh.sway[v];
+      const k = wSway * sw.amp;
+      // Traveling wave flutter + directional 2.5D wind/inertia billow (hair & cape follow-through)
+      fx += Math.sin(sw.phase + vy * 0.05 + vx * 0.018) * k + (sw.windX || 0) * Math.pow(wSway, 1.15);
+      fy += Math.cos(sw.phase * 2 + vx * 0.04) * k * 0.3 + (sw.windY || 0) * Math.pow(wSway, 1.15);
     }
     outPos[v * 2] = fx;
     outPos[v * 2 + 1] = fy;

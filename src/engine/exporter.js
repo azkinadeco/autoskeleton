@@ -22,9 +22,12 @@ export function generateSpriteSheet({
   padding = 4,
   flipX = false,
   directionMode = 'single', // 'single' | 'dual' | 'four_way'
+  layoutMode = 'auto', // 'auto' | 'grid' | 'rows'
   pixelArt = false,
   intensity = 1.0,
   squash = 1.0,
+  showVfx = true,
+  slashColor = null,
   characterName = 'aetheria_hero',
   engineFormat = 'phaser',
 }) {
@@ -58,12 +61,23 @@ export function generateSpriteSheet({
   const offsetX = (frameSize - srcW * fitScale) * 0.5;
   const offsetY = (frameSize - srcH * fitScale) * 0.52;
 
-  const maxCols = Math.max(...expandedAnims.map((a) => a.frames));
-  const totalRows = expandedAnims.length;
-  const cellW = frameSize + padding;
-  const cellH = frameSize + padding;
-  const sheetW = maxCols * cellW + padding;
-  const sheetH = totalRows * cellH + padding;
+  // Use AutoSprite square grid layout when exporting a single animation with >= 9 frames or when layoutMode === 'grid'
+  const useSquareGrid =
+    expandedAnims.length === 1 &&
+    (layoutMode === 'grid' || (layoutMode === 'auto' && expandedAnims[0].frames >= 9));
+  const effPad = useSquareGrid ? 0 : padding;
+
+  const gridCols = useSquareGrid
+    ? Math.ceil(Math.sqrt(expandedAnims[0].frames))
+    : Math.max(...expandedAnims.map((a) => a.frames));
+  const totalRows = useSquareGrid
+    ? Math.ceil(expandedAnims[0].frames / gridCols)
+    : expandedAnims.length;
+
+  const cellW = frameSize + effPad;
+  const cellH = frameSize + effPad;
+  const sheetW = gridCols * cellW + effPad;
+  const sheetH = totalRows * cellH + effPad;
 
   const sheetCanvas = document.createElement('canvas');
   sheetCanvas.width = sheetW;
@@ -89,7 +103,7 @@ export function generateSpriteSheet({
           ? f / (anim.frames - 1)
           : 0;
 
-      const pose = evaluateAnimation(anim.id, t, skForRow, { intensity, squash });
+      const pose = evaluateAnimation(anim.id, t, skForRow, { intensity, squash, slashColor });
       const { posedJoints, boneTransforms } = solveForwardKinematics(skForRow, pose);
 
       fctx.clearRect(0, 0, frameSize, frameSize);
@@ -99,6 +113,7 @@ export function generateSpriteSheet({
         scale: fitScale,
         flipX: anim.rowFlipX,
         flash: pose.flash || 0,
+        showVfx,
       };
 
       if (renderMode === 'hybrid_mesh' && mesh) {
@@ -116,8 +131,10 @@ export function generateSpriteSheet({
         });
       }
 
-      const dx = padding + f * cellW;
-      const dy = padding + row * cellH;
+      const cellCol = useSquareGrid ? f % gridCols : f;
+      const cellRow = useSquareGrid ? Math.floor(f / gridCols) : row;
+      const dx = effPad + cellCol * cellW;
+      const dy = effPad + cellRow * cellH;
       sctx.drawImage(frameCanvas, dx, dy);
 
       const frameName = `${characterName}_${anim.exportId}_${String(f).padStart(2, '0')}.png`;
@@ -126,8 +143,8 @@ export function generateSpriteSheet({
         name: frameName,
         animId: anim.exportId,
         frameIndex: f,
-        row,
-        col: f,
+        row: cellRow,
+        col: cellCol,
         x: dx,
         y: dy,
         w: frameSize,
@@ -137,6 +154,7 @@ export function generateSpriteSheet({
 
     animMap[anim.exportId] = {
       row,
+      cols: gridCols,
       fps: anim.fps,
       loop: isLoop,
       frameCount: anim.frames,
@@ -468,4 +486,208 @@ export async function exportAnimationWebM({
 
     renderNext();
   });
+}
+
+/**
+ * 100% Offline Animated GIF89a Encoder (with 3-3-2 RGB + transparent index 0 & LZW compression).
+ * Exports an animated .gif directly in the browser without external libraries or APIs!
+ */
+function lzwEncode(indices, minCodeSize = 8) {
+  const out = [];
+  const clearCode = 1 << minCodeSize;
+  const endCode = clearCode + 1;
+  let codeSize = minCodeSize + 1;
+  let nextCode = endCode + 1;
+
+  let bitBuf = 0;
+  let bitCnt = 0;
+  const subBlock = [];
+  const flushSubBlock = () => {
+    if (subBlock.length > 0) {
+      out.push(subBlock.length, ...subBlock);
+      subBlock.length = 0;
+    }
+  };
+  const emit = (code) => {
+    bitBuf |= code << bitCnt;
+    bitCnt += codeSize;
+    while (bitCnt >= 8) {
+      subBlock.push(bitBuf & 0xff);
+      if (subBlock.length === 255) flushSubBlock();
+      bitBuf >>= 8;
+      bitCnt -= 8;
+    }
+  };
+
+  let table = new Map();
+  const resetTable = () => {
+    table = new Map();
+    codeSize = minCodeSize + 1;
+    nextCode = endCode + 1;
+    emit(clearCode);
+  };
+
+  resetTable();
+  let prefix = indices[0] & 0xff;
+
+  for (let i = 1; i < indices.length; i++) {
+    const k = indices[i] & 0xff;
+    const key = (prefix << 8) | k;
+    const hit = table.get(key);
+    if (hit !== undefined) {
+      prefix = hit;
+    } else {
+      emit(prefix);
+      if (nextCode < 4096) {
+        table.set(key, nextCode++);
+        if (nextCode > (1 << codeSize) && codeSize < 12) {
+          codeSize++;
+        }
+      } else {
+        resetTable();
+      }
+      prefix = k;
+    }
+  }
+  emit(prefix);
+  emit(endCode);
+  if (bitCnt > 0) {
+    subBlock.push(bitBuf & 0xff);
+  }
+  flushSubBlock();
+  out.push(0); // block terminator
+  return out;
+}
+
+export function exportAnimationGIF({
+  imageCanvas,
+  partLayers,
+  mesh,
+  skeleton,
+  renderMode = 'hybrid_mesh',
+  animId = 'combo',
+  frameSize = 256,
+  frameCount = 25,
+  fps = 14,
+  speed = 1.0,
+  flipX = false,
+  pixelArt = false,
+  intensity = 1.0,
+  squash = 1.0,
+  showVfx = true,
+  slashColor = null,
+  filename = 'hero_attack.gif',
+}) {
+  const c = document.createElement('canvas');
+  c.width = frameSize;
+  c.height = frameSize;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+
+  const srcW = imageCanvas.width;
+  const srcH = imageCanvas.height;
+  const fitScale = Math.min((frameSize * 0.82) / srcW, (frameSize * 0.82) / srcH);
+  const offsetX = (frameSize - srcW * fitScale) * 0.5;
+  const offsetY = (frameSize - srcH * fitScale) * 0.52;
+
+  // Build 256-color global palette: index 0 = transparent, 1..255 = 6x7x6 RGB cube + pinks/whites
+  const palette = new Uint8Array(256 * 3);
+  let pIdx = 1;
+  for (let r = 0; r < 6; r++) {
+    for (let g = 0; g < 7; g++) {
+      for (let b = 0; b < 6; b++) {
+        if (pIdx >= 256) break;
+        palette[pIdx * 3] = Math.round((r * 255) / 5);
+        palette[pIdx * 3 + 1] = Math.round((g * 255) / 6);
+        palette[pIdx * 3 + 2] = Math.round((b * 255) / 5);
+        pIdx++;
+      }
+    }
+  }
+
+  const quantizePixel = (r, g, b, a) => {
+    if (a < 36) return 0; // transparent index 0
+    const ri = Math.min(5, Math.round((r * 5) / 255));
+    const gi = Math.min(6, Math.round((g * 6) / 255));
+    const bi = Math.min(5, Math.round((b * 5) / 255));
+    return Math.min(255, Math.max(1, 1 + ri * 42 + gi * 6 + bi));
+  };
+
+  const bytes = [];
+  const writeStr = (s) => { for (let i = 0; i < s.length; i++) bytes.push(s.charCodeAt(i)); };
+  const writeU16 = (v) => { bytes.push(v & 0xff, (v >> 8) & 0xff); };
+
+  // GIF89a Header & Logical Screen Descriptor
+  writeStr('GIF89a');
+  writeU16(frameSize);
+  writeU16(frameSize);
+  bytes.push(0xf7, 0x00, 0x00); // Global color table flag (256 colors)
+  for (let i = 0; i < 256 * 3; i++) bytes.push(palette[i]);
+
+  // Netscape 2.0 Loop Extension (infinite loop)
+  bytes.push(0x21, 0xff, 0x0b);
+  writeStr('NETSCAPE2.0');
+  bytes.push(0x03, 0x01, 0x00, 0x00, 0x00);
+
+  const delayCs = Math.max(3, Math.round(100 / Math.max(4, fps * speed)));
+  const indexed = new Uint8Array(frameSize * frameSize);
+
+  for (let f = 0; f < frameCount; f++) {
+    const t = f / frameCount;
+    const pose = evaluateAnimation(animId, t, skeleton, { intensity, squash, slashColor });
+    const { posedJoints, boneTransforms } = solveForwardKinematics(skeleton, pose);
+
+    ctx.clearRect(0, 0, frameSize, frameSize);
+    const view = { offsetX, offsetY, scale: fitScale, flipX, flash: pose.flash || 0, showVfx };
+
+    if (renderMode === 'hybrid_mesh' && mesh) {
+      deformMesh(mesh, boneTransforms);
+      renderDeformedMesh2D(ctx, imageCanvas, mesh, view, pixelArt);
+    } else {
+      renderCutoutCharacter(ctx, frameSize, frameSize, {
+        partLayers,
+        skeleton,
+        posedJoints,
+        pose,
+        view,
+        pixelArt,
+        explodeAmount: 0,
+      });
+    }
+
+    const rgba = ctx.getImageData(0, 0, frameSize, frameSize).data;
+    for (let i = 0; i < frameSize * frameSize; i++) {
+      const o = i * 4;
+      indexed[i] = quantizePixel(rgba[o], rgba[o + 1], rgba[o + 2], rgba[o + 3]);
+    }
+
+    // Graphic Control Extension (dispose = 2 restore to background, transparent index = 0)
+    bytes.push(0x21, 0xf9, 0x04, 0x09);
+    writeU16(delayCs);
+    bytes.push(0x00, 0x00);
+
+    // Image Descriptor
+    bytes.push(0x2c);
+    writeU16(0);
+    writeU16(0);
+    writeU16(frameSize);
+    writeU16(frameSize);
+    bytes.push(0x00);
+
+    // LZW Image Data
+    bytes.push(8);
+    const lzw = lzwEncode(indexed, 8);
+    for (let i = 0; i < lzw.length; i++) bytes.push(lzw[i]);
+  }
+
+  bytes.push(0x3b); // GIF Trailer
+
+  const blob = new Blob([new Uint8Array(bytes)], { type: 'image/gif' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
 }

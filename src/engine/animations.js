@@ -12,19 +12,51 @@
 const TAU = Math.PI * 2;
 
 export const ANIMATION_LIST = [
+  { id: 'attack',  name: 'Attack (Slash)',     defaultFps: 14, defaultFrames: 8,  loop: true,  icon: '⚔️' },
+  { id: 'combo',   name: 'Combo Slash (25f)',  defaultFps: 15, defaultFrames: 25, loop: true,  icon: '🔥' },
   { id: 'run',     name: 'Run (Lari)',         defaultFps: 14, defaultFrames: 8,  loop: true,  icon: '🏃' },
   { id: 'idle',    name: 'Idle (Napas)',       defaultFps: 8,  defaultFrames: 8,  loop: true,  icon: '🧘' },
   { id: 'walk',    name: 'Walk (Jalan)',       defaultFps: 10, defaultFrames: 8,  loop: true,  icon: '🚶' },
   { id: 'dash',    name: 'Dash (Dodge)',       defaultFps: 14, defaultFrames: 6,  loop: true,  icon: '💨' },
   { id: 'jump',    name: 'Jump (Lompat)',      defaultFps: 12, defaultFrames: 8,  loop: true,  icon: '🦘' },
-  { id: 'attack',  name: 'Attack (Serang)',    defaultFps: 14, defaultFrames: 8,  loop: true,  icon: '⚔️' },
   { id: 'cast',    name: 'Cast Spell (Sihir)', defaultFps: 10, defaultFrames: 8,  loop: true,  icon: '✨' },
   { id: 'block',   name: 'Block (Bertahan)',   defaultFps: 8,  defaultFrames: 6,  loop: true,  icon: '🛡️' },
-  { id: 'gather',  name: 'Mine / Gather',      defaultFps: 12, defaultFrames: 8,  loop: true,  icon: '⛏️' },
+  { id: 'gather',  name: 'Heavy Cleave',       defaultFps: 12, defaultFrames: 8,  loop: true,  icon: '🪓' },
   { id: 'hurt',    name: 'Hurt (Kena Hit)',    defaultFps: 12, defaultFrames: 6,  loop: true,  icon: '💥' },
   { id: 'death',   name: 'Death (KO)',         defaultFps: 10, defaultFrames: 8,  loop: false, icon: '💀' },
   { id: 'victory', name: 'Victory',            defaultFps: 10, defaultFrames: 8,  loop: true,  icon: '🎉' },
 ];
+
+/**
+ * Parses a natural-language custom action prompt (e.g. "bloody combo slash", "heavy fire cleave",
+ * "lightning dash attack", "floating magic aura") into animation parameters & VFX overrides.
+ */
+export function parseCustomActionPrompt(prompt = '') {
+  const q = prompt.toLowerCase().trim();
+  let animId = 'combo';
+  let slashColor = null;
+  let speed = 1.0;
+  let intensity = 1.05;
+
+  if (/fire|flame|api|merah|blood|crimson/.test(q)) slashColor = '#ff3b78';
+  else if (/ice|frost|es|cyan|blue|water|air/.test(q)) slashColor = '#38bdf8';
+  else if (/light|gold|holy|petir|thunder|kuning/.test(q)) slashColor = '#facc15';
+  else if (/poison|racun|green|wind|angin/.test(q)) slashColor = '#4ade80';
+  else if (/void|dark|shadow|ungu|purple/.test(q)) slashColor = '#c084fc';
+
+  if (/run|lari|sprint/.test(q)) { animId = 'run'; speed = 1.15; }
+  else if (/walk|jalan/.test(q)) { animId = 'walk'; }
+  else if (/idle|stand|breath|napas/.test(q)) { animId = 'idle'; }
+  else if (/cast|magic|spell|sihir|aura|float/.test(q)) { animId = 'cast'; intensity = 1.15; }
+  else if (/dash|dodge|blink/.test(q)) { animId = 'dash'; speed = 1.2; }
+  else if (/jump|leap|lompat/.test(q)) { animId = 'jump'; }
+  else if (/block|shield|defend|guard|tangkis/.test(q)) { animId = 'block'; }
+  else if (/heavy|cleave|smash|kapak|keras/.test(q)) { animId = 'attack'; intensity = 1.25; speed = 0.9; }
+  else if (/combo|custom|double|flurry|25/.test(q)) { animId = 'combo'; intensity = 1.1; }
+  else if (/attack|slash|sword|tebas|serang/.test(q)) { animId = 'combo'; }
+
+  return { animId, slashColor, speed, intensity };
+}
 
 export function evaluateAnimation(animId, t, skeleton, params = {}) {
   const I = params.intensity ?? 1.0;
@@ -34,18 +66,22 @@ export function evaluateAnimation(animId, t, skeleton, params = {}) {
 
   let pose;
   const weaponSide = findWeaponSide(skeleton);
-  if (animId === 'attack' && weaponSide) {
-    pose = evaluateWeaponAttack(t, h, I, SQ, skeleton, weaponSide);
+  if ((animId === 'attack' || animId === 'combo') && weaponSide) {
+    pose = evaluateWeaponAttack(t, h, I, SQ, skeleton, weaponSide, animId === 'combo', params.slashColor);
   } else if ((viewDir === 'front' || viewDir === 'back') && skeleton?.templateId !== 'knight_34') {
-    pose = evaluateFrontOrBackAnimation(animId, t, h, I, SQ, viewDir === 'back');
+    pose = evaluateFrontOrBackAnimation(animId === 'combo' ? 'attack' : animId, t, h, I, SQ, viewDir === 'back');
   } else {
     const dir = viewDir === 'side_left' ? -1 : 1;
-    pose = evaluateSideAnimation(animId, t, h, I, SQ, dir);
+    pose = evaluateSideAnimation(animId === 'combo' ? 'attack' : animId, t, h, I, SQ, dir);
+  }
+
+  if (params.slashColor && pose.slash) {
+    pose.slash.color = params.slashColor;
   }
 
   if (!pose.sway) {
-    const amp = { idle: 0.004, walk: 0.007, run: 0.013, dash: 0.014, jump: 0.012, attack: 0.016, hurt: 0.012 }[animId] ?? 0.008;
-    pose.sway = { phase: (t % 1) * TAU, amp: amp * I };
+    const amp = { idle: 0.004, walk: 0.007, run: 0.013, dash: 0.014, jump: 0.012, attack: 0.016, combo: 0.018, hurt: 0.012 }[animId] ?? 0.008;
+    pose.sway = { phase: (t % 1) * TAU, amp: amp * I, windX: 0, windY: 0 };
   }
   return pose;
 }
@@ -59,45 +95,139 @@ const easeInOut = (k) => k * k * (3 - 2 * k);
 const clamp01 = (k) => Math.max(0, Math.min(1, k));
 
 /**
- * Overhead sword chop for characters with a detected long weapon:
- * crouch + raise (anticipation) -> fast sweep with slash trail -> follow-through -> recover.
+ * Heroic Anime Weapon Attack & 25-Frame AutoSprite Combo Choreography:
+ * - Single Attack (8f): Windup overhead -> Fast sweeping forehand crescent slash + sparks -> Follow-through billow -> Recover.
+ * - Combo Attack (25f, modeled directly on `bloody charlote-asm_custom_attack.png` 5x5 sheet):
+ *   Row 1 (0.00-0.22): Overhead raise & explosive forehand downward-right pink crescent slash + spark burst
+ *   Row 2 (0.22-0.42): Dynamic follow-through stance with shield braced right & red hair billowing left
+ *   Row 3 (0.42-0.60): Reverse upward diagonal backhand slash crescent returning sword overhead
+ *   Row 4-5 (0.60-1.00): Overhead poise -> smooth recovery back to standing idle stance
  */
-function evaluateWeaponAttack(t, h, I, SQ, skeleton, side) {
+function evaluateWeaponAttack(t, h, I, SQ, skeleton, side, isCombo = false, slashColor = null) {
   const p = t % 1;
-  const sg = side === 'r' ? 1 : -1; // screen-left weapon rotates clockwise (+), mirrored for screen-right
+  const sg = side === 'r' ? 1 : -1;
   const other = side === 'r' ? 'l' : 'r';
   const joints = Object.fromEntries(skeleton.joints.map((j) => [j.id, j]));
   const hand = joints['hand_' + side];
   const tip = joints['weapon_' + side];
   let bind = Math.atan2(tip.y - hand.y, tip.x - hand.x);
-  if (sg < 0) bind = Math.PI - bind; // reflect into the "screen-left" frame
+  if (sg < 0) bind = Math.PI - bind;
   const norm = (a) => ((a % TAU) + TAU) % TAU;
-  const windRot = norm((250 * Math.PI) / 180 - bind);
-  let endRot = norm((70 * Math.PI) / 180 - bind);
+  const windRot = norm((252 * Math.PI) / 180 - bind);
+  let endRot = norm((38 * Math.PI) / 180 - bind);
   if (endRot <= windRot + 0.5) endRot += TAU;
 
-  // Timeline
-  let rot = 0, wind = 0, strike = 0, recover = 0;
-  if (p < 0.32) {
-    wind = easeInOut(p / 0.32);
-    rot = windRot * wind;
-  } else if (p < 0.42) {
-    wind = 1;
-    rot = windRot + Math.sin(((p - 0.32) / 0.1) * Math.PI) * 0.05;
-  } else if (p < 0.62) {
-    const k = clamp01((p - 0.42) / 0.2);
-    strike = k * k;
-    wind = 1 - strike;
-    rot = windRot + (endRot - windRot) * strike;
-  } else if (p < 0.72) {
-    strike = 1;
-    rot = endRot + Math.sin(((p - 0.62) / 0.1) * Math.PI * 0.5) * 0.12;
+  let rot = 0, wind = 0, strike = 0, billow = 0;
+  let slashSpec = null;
+
+  if (!isCombo) {
+    // 8-Frame Single Heroic Slash
+    if (p < 0.28) {
+      wind = easeInOut(p / 0.28);
+      rot = windRot * wind;
+    } else if (p < 0.38) {
+      wind = 1;
+      rot = windRot + Math.sin(((p - 0.28) / 0.10) * Math.PI) * 0.06;
+    } else if (p < 0.58) {
+      const k = clamp01((p - 0.38) / 0.20);
+      strike = 1 - Math.pow(1 - k, 2.4);
+      wind = 1 - strike;
+      rot = windRot + (endRot - windRot) * strike;
+      billow = Math.sin(k * Math.PI);
+    } else if (p < 0.72) {
+      const k = (p - 0.58) / 0.14;
+      strike = 1 - k * 0.25;
+      billow = 1 - k * 0.35;
+      rot = endRot + Math.sin(k * Math.PI * 0.5) * 0.08;
+    } else {
+      const k = easeInOut((p - 0.72) / 0.28);
+      strike = (1 - k) * 0.75;
+      billow = (1 - k) * 0.65;
+      rot = (endRot - TAU) * (1 - k);
+    }
+
+    const sweepK = p >= 0.39 && p < 0.66 ? Math.sin(clamp01((p - 0.39) / 0.27) * Math.PI) : 0;
+    if (sweepK > 0.03) {
+      const prog = clamp01((p - 0.39) / 0.24);
+      slashSpec = {
+        side,
+        centerChest: true,
+        radiusScale: 0.54,
+        ellipseRatio: 0.74,
+        tilt: 0.18 * sg,
+        leadAngle: (-0.55 + prog * 1.15) * sg + (sg < 0 ? Math.PI : 0),
+        trail: 2.35 * Math.min(1, sweepK * 1.35),
+        alpha: Math.min(1, sweepK * 1.3),
+        sparks: p >= 0.46 && p < 0.62 ? sweepK : sweepK * 0.4,
+        color: slashColor,
+      };
+    }
   } else {
-    const k = easeInOut((p - 0.72) / 0.28);
-    recover = k;
-    strike = 1 - k;
-    rot = endRot * (1 - k) + (endRot - TAU) * 0 ; // blend back to bind pose (TAU-periodic)
-    rot = (endRot - TAU) * (1 - k);
+    // 25-Frame AutoSprite 2-Hit Custom Combo (modeled on bloody charlote-asm_custom_attack.png)
+    if (p < 0.12) {
+      // Frames 1-3: Raise sword overhead
+      wind = easeInOut(p / 0.12);
+      rot = windRot * wind;
+    } else if (p < 0.22) {
+      // Frames 4-5: Explosive forehand slash across chest + huge pink crescent arc & sparks
+      const k = clamp01((p - 0.12) / 0.10);
+      strike = 1 - Math.pow(1 - k, 2.2);
+      wind = 1 - strike;
+      rot = windRot + (endRot - windRot) * strike;
+      billow = k;
+      const arcAlpha = Math.sin(k * Math.PI);
+      slashSpec = {
+        side,
+        centerChest: true,
+        radiusScale: 0.56,
+        ellipseRatio: 0.70,
+        tilt: 0.20 * sg,
+        leadAngle: (0.15 + k * 0.55) * sg + (sg < 0 ? Math.PI : 0),
+        trail: 2.55,
+        alpha: Math.min(1, arcAlpha * 1.35 + 0.15),
+        sparks: k > 0.35 ? 1.0 : 0.6,
+        color: slashColor,
+      };
+    } else if (p < 0.42) {
+      // Frames 6-10 (Row 2): Follow-through hold, shield forward-right, hair billowing strongly left
+      const k = (p - 0.22) / 0.20;
+      strike = 1 - k * 0.18;
+      billow = 1.0 - k * 0.25;
+      rot = endRot + Math.sin(k * Math.PI) * 0.08;
+    } else if (p < 0.54) {
+      // Frames 11-13 (Row 3 start): Reverse upward diagonal slash returning sword to overhead
+      const k = clamp01((p - 0.42) / 0.12);
+      const ease = easeInOut(k);
+      strike = 0.82 * (1 - ease);
+      wind = ease * 0.85;
+      billow = 0.75 * (1 - k * 0.5);
+      rot = endRot - (endRot - windRot * 0.88) * ease;
+      const arcAlpha = Math.sin(k * Math.PI);
+      slashSpec = {
+        side,
+        centerChest: true,
+        radiusScale: 0.50,
+        ellipseRatio: 0.74,
+        tilt: -0.24 * sg,
+        leadAngle: (0.65 - k * 1.55) * sg + (sg < 0 ? Math.PI : 0),
+        trail: -2.25,
+        alpha: Math.min(1, arcAlpha * 1.25),
+        sparks: arcAlpha * 0.85,
+        color: slashColor,
+      };
+    } else if (p < 0.74) {
+      // Frames 14-18: Settle sword from raised poise back to original bind angle
+      const k = easeInOut((p - 0.54) / 0.20);
+      wind = 0.85 * (1 - k);
+      billow = 0.38 * (1 - k);
+      rot = windRot * 0.88 * (1 - k);
+    } else {
+      // Frames 19-25 (Row 4-5): Breathing combat stance settle
+      const k = (p - 0.74) / 0.26;
+      const breath = Math.sin(k * Math.PI);
+      rot = Math.sin(k * Math.PI) * 0.04;
+      billow = breath * 0.12;
+    }
   }
 
   const pose = {
@@ -105,43 +235,58 @@ function evaluateWeaponAttack(t, h, I, SQ, skeleton, side) {
     rootScale: { x: 1, y: 1 },
     rotations: {},
     offsets: {},
+    boneScales: {},
     partAngles: {},
     partOffsets: {},
     flash: 0,
   };
   const R = pose.rotations;
-  const crouch = wind * (p < 0.42 ? 1 : 0.6);
+  const crouch = wind * 0.75;
 
-  pose.rootOffset.y = (crouch * 0.04 - strike * 0.012) * h * I;
-  pose.rootOffset.x = sg * (-wind * 0.02 + strike * 0.035) * h * I;
-  pose.rootScale.x = 1 + (strike * 0.035 + crouch * 0.025) * I * SQ;
-  pose.rootScale.y = 1 + (strike * 0.045 - crouch * 0.05) * I * SQ;
+  pose.rootOffset.y = (crouch * 0.036 - strike * 0.010) * h * I;
+  pose.rootOffset.x = sg * (-wind * 0.022 + strike * 0.048) * h * I;
+  pose.rootScale.x = 1 + (strike * 0.030 + crouch * 0.020) * I * SQ;
+  pose.rootScale.y = 1 + (strike * 0.038 - crouch * 0.042) * I * SQ;
 
-  R.hip = sg * (-wind * 0.06 + strike * 0.10) * I;
-  R.neck = sg * (wind * 0.05 - strike * 0.09) * I;
+  R.hip = sg * (-wind * 0.05 + strike * 0.11) * I;
+  R.neck = sg * (wind * 0.04 - strike * 0.08) * I;
 
-  R['shoulder_' + side] = rot * 0.55 * I;
-  R['elbow_' + side] = rot * 0.45 * I;
+  // Put 82% of the large weapon swing on the forearm/wrist so shoulder rotation never twists back-hair across the face!
+  R['shoulder_' + side] = rot * 0.18 * I;
+  R['elbow_' + side] = rot * 0.82 * I;
   R['hand_' + side] = 0;
   if (sg < 0) {
     R['shoulder_' + side] *= -1;
     R['elbow_' + side] *= -1;
     R['hand_' + side] *= -1;
   }
-  // Shield arm braces forward during the strike
-  R['shoulder_' + other] = -sg * (wind * 0.10 - strike * 0.16) * I;
+
+  // 2.5D Shield Parallax & Foreshortening: shield braces forward & compresses slightly as character turns
+  R['shoulder_' + other] = -sg * (wind * 0.08 - strike * 0.14) * I;
+  pose.offsets['shoulder_' + other] = {
+    x: sg * (strike * 0.028 - wind * 0.015) * h * I,
+    y: -strike * 0.012 * h * I,
+  };
+  pose.boneScales['shoulder_' + other] = {
+    x: 1 - strike * 0.11 * I,
+    y: 1 + strike * 0.02 * I,
+  };
 
   // Feet plant & widen on the strike
-  pose.offsets.hip_l = { x: -strike * h * 0.015 * I, y: 0 };
-  pose.offsets.hip_r = { x: strike * h * 0.015 * I, y: 0 };
+  pose.offsets.hip_l = { x: -strike * h * 0.018 * I, y: 0 };
+  pose.offsets.hip_r = { x: strike * h * 0.022 * I, y: 0 };
 
-  // Slash trail during the sweep
-  const sweepK = p >= 0.44 && p < 0.7 ? Math.sin(clamp01((p - 0.44) / 0.26) * Math.PI) : 0;
-  if (sweepK > 0.02) {
-    pose.slash = { side, alpha: Math.min(1, sweepK * 1.25), trail: 1.9 * Math.min(1, sweepK * 1.4) };
+  if (slashSpec) {
+    pose.slash = slashSpec;
   }
 
-  pose.sway = { phase: p * TAU, amp: (0.012 + strike * 0.012 + wind * 0.008) * I };
+  // Dynamic hair & cape wind billow opposite to lunge direction!
+  pose.sway = {
+    phase: p * TAU * (isCombo ? 2 : 1),
+    amp: (0.010 + billow * 0.016 + wind * 0.006) * I,
+    windX: -sg * (billow * 0.052 - wind * 0.018) * I,
+    windY: -billow * 0.014 * I,
+  };
   return pose;
 }
 

@@ -10,10 +10,31 @@ function apiBase() {
   return location.protocol.startsWith('http') ? '/api/as' : 'https://www.autosprite.io/api/v1';
 }
 
-export function initCloud({ getSpriteBlob, getName }) {
+export function initCloud({ getSpriteBlob, getName, onOpenVideoSheet }) {
   const $ = (id) => document.getElementById(id);
   const modal = $('cloudModal');
   if (!modal) return;
+
+  const btnComfy = $('btnFreeCheckComfy');
+  const btnVideo = $('btnFreeGotoVideo');
+  const lblFree = $('lblFreeAiStatus');
+  btnVideo?.addEventListener('click', () => {
+    modal.classList.add('hidden');
+    onOpenVideoSheet?.();
+  });
+  btnComfy?.addEventListener('click', async () => {
+    if (lblFree) lblFree.textContent = 'Mengecek ComfyUI lokal di http://127.0.0.1:8188...';
+    try {
+      const r = await fetch('http://127.0.0.1:8188/system_stats');
+      if (r.ok) {
+        if (lblFree) lblFree.textContent = '✅ ComfyUI Lokal terhubung (127.0.0.1:8188)! Generate video I2V lalu drop ke tab Video → Sheet.';
+      } else {
+        throw new Error('HTTP ' + r.status);
+      }
+    } catch {
+      if (lblFree) lblFree.textContent = 'ℹ ComfyUI lokal belum aktif di port 8188. Kamu bisa pakai link Hugging Face Wan 2.1 / LTX-Video gratis di atas.';
+    }
+  });
 
   const els = {
     open: $('btnOpenCloud'), close: $('btnCloseCloud'), badge: $('lblCredits'),
