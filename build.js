@@ -2,7 +2,7 @@
 const fs = require("fs");
 let html = fs.readFileSync("template.html", "utf8");
 const css = fs.readFileSync("styles.css", "utf8");
-const files = ["src/utils/defaultKnightData.js","src/utils/aetheriaPresets.js","src/utils/imageProcessing.js","src/engine/fx.js","src/engine/skeleton.js","src/engine/partCutter.js","src/engine/meshSkinning.js","src/engine/renderer.js","src/engine/animations.js","src/engine/exporter.js","src/ui/playtest.js","src/ui/cloud.js","src/main.js"];
+const files = ["src/utils/defaultKnightData.js","src/utils/aetheriaPresets.js","src/utils/imageProcessing.js","src/engine/fx.js","src/engine/skeleton.js","src/engine/partCutter.js","src/engine/meshSkinning.js","src/engine/renderer.js","src/engine/animations.js","src/engine/exporter.js","src/ui/playtest.js","src/ui/cloud.js","src/ui/videoToSheet.js","src/main.js"];
 let js = "(function(){\n\"use strict\";\n";
 for (const f of files) {
   let c = fs.readFileSync(f, "utf8");

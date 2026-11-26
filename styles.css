@@ -335,3 +335,47 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
 .cloud-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .cloud-links a { background: #1b2740; border: 1px solid var(--accent); color: var(--accent); padding: 4px 9px; border-radius: 7px; font-size: 12px; text-decoration: none; }
 #cloudLog { max-height: 110px; white-space: pre-wrap; }
+
+/* Video to SpriteSheet */
+.video-sheet-view {
+  position: absolute; inset: 0; padding: 46px 14px 14px; overflow-y: auto;
+  background: rgba(9,14,26,.96); z-index: 6;
+}
+.v2s-layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 14px; min-height: 100%; }
+.v2s-sidebar { display: flex; flex-direction: column; gap: 10px; }
+.v2s-drop {
+  border: 1.5px dashed var(--accent); border-radius: 10px; padding: 14px 10px;
+  text-align: center; cursor: pointer; background: rgba(56,189,248,.06);
+  display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text);
+}
+.v2s-drop span { color: var(--muted); font-size: 11px; }
+.v2s-drop.dragover, .v2s-drop:hover { background: rgba(56,189,248,.14); }
+.v2s-group { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+.v2s-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.v2s-prompt-box {
+  background: #090d16; border: 1px solid var(--border); border-radius: 7px; padding: 8px;
+  font-size: 11px; color: #cbd5e1; line-height: 1.45; user-select: all;
+}
+.v2s-main { min-width: 0; }
+.v2s-preview-row { display: grid; grid-template-columns: 256px minmax(0, 1fr); gap: 12px; align-items: start; }
+.v2s-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.v2s-card-head { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.v2s-card canvas {
+  border-radius: 8px; border: 1px solid var(--border);
+  background-color: #0e1626;
+  background-image:
+    linear-gradient(45deg, #162238 25%, transparent 25%),
+    linear-gradient(-45deg, #162238 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #162238 75%),
+    linear-gradient(-45deg, transparent 75%, #162238 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+#v2sAnimCanvas { width: 100%; aspect-ratio: 1; image-rendering: auto; }
+.v2s-sheet-scroll { max-height: 62vh; overflow: auto; }
+#v2sSheetCanvas { max-width: 100%; height: auto; display: block; }
+@media (max-width: 1050px) {
+  .v2s-layout, .v2s-preview-row { grid-template-columns: 1fr; }
+}

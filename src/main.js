@@ -51,6 +51,7 @@ import {
 } from './engine/exporter.js';
 import { PlaytestArena } from './ui/playtest.js';
 import { initCloud } from './ui/cloud.js';
+import { initVideoToSheet } from './ui/videoToSheet.js';
 
 const state = {
   mode: 'animate', // 'animate' | 'rig' | 'multigrid' | 'playtest'
@@ -106,6 +107,7 @@ const el = {
   overlayCanvas: document.getElementById('overlayCanvas'),
   playBgCanvas: document.getElementById('playBgCanvas'),
   multiGridView: document.getElementById('multiGridView'),
+  videoSheetView: document.getElementById('videoSheetView'),
   viewportStage: document.getElementById('viewportStage'),
   viewportHint: document.getElementById('viewportHint'),
   backdropSwitcher: document.getElementById('backdropSwitcher'),
@@ -707,16 +709,21 @@ function setMode(newMode) {
 
   const isPlaytest = newMode === 'playtest';
   const isMultiGrid = newMode === 'multigrid';
+  const isVideoSheet = newMode === 'videosheet';
   playtest.active = isPlaytest;
+  videoToSheet?.setActive(isVideoSheet);
 
-  el.charCanvas.classList.toggle('hidden', isPlaytest || isMultiGrid);
-  el.overlayCanvas.classList.toggle('hidden', isPlaytest || isMultiGrid);
+  el.charCanvas.classList.toggle('hidden', isPlaytest || isMultiGrid || isVideoSheet);
+  el.overlayCanvas.classList.toggle('hidden', isPlaytest || isMultiGrid || isVideoSheet);
   el.playBgCanvas.classList.toggle('hidden', !isPlaytest);
   el.multiGridView?.classList.toggle('hidden', !isMultiGrid);
+  el.videoSheetView?.classList.toggle('hidden', !isVideoSheet);
   el.playtestControls.classList.toggle('hidden', !isPlaytest);
-  el.timelineBar.classList.toggle('hidden', isPlaytest || isMultiGrid);
+  el.timelineBar.classList.toggle('hidden', isPlaytest || isMultiGrid || isVideoSheet);
 
-  if (isMultiGrid) {
+  if (isVideoSheet) {
+    el.viewportHint.textContent = 'Drop video MP4/WebM (Wan / LTX / Kling / ComfyUI) → PNG Sprite Sheet + JSON otomatis';
+  } else if (isMultiGrid) {
     buildMultiGridCards();
     el.viewportHint.textContent = 'Klik kartu untuk memilih • ⬇ PNG untuk unduh strip';
   } else if (newMode === 'rig') {
@@ -1360,6 +1367,10 @@ function tick(now) {
 
   requestAnimationFrame(tick);
 }
+
+const videoToSheet = initVideoToSheet({
+  getCharName: () => el.inpCharName.value.trim(),
+});
 
 initCloud({
   getName: () => el.inpCharName.value.trim(),
