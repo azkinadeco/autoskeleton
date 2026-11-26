@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Skeleton Studio</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">🦴</div>
+        <h1>Auto Skeleton</h1>
+      </div>
+
+      <nav class="mode-tabs" role="tablist">
+        <button class="tab-btn active" data-mode="animate">Animasi</button>
+        <button class="tab-btn" data-mode="rig">Potong</button>
+        <button class="tab-btn" data-mode="multigrid">Semua Gerakan</button>
+        <button class="tab-btn" data-mode="playtest">Test Play</button>
+      </nav>
+
+      <div class="topbar-actions">
+        <select id="selPresetChar" title="Karakter contoh">
+          <option value="sven">Sven (depan)</option>
+          <option value="kali">Kali (depan)</option>
+          <option value="ymir">Ymir (boss)</option>
+          <option value="knight">Ksatria (samping)</option>
+          <option value="demo">Demo</option>
+        </select>
+        <label class="btn btn-secondary" for="fileInput">Upload</label>
+        <input type="file" id="fileInput" accept="image/png,image/webp,image/jpeg" hidden />
+        <button class="btn btn-secondary" id="btnOpenCloud" title="AutoSprite AI (online)">☁ AI <span class="credit-badge hidden" id="lblCredits"></span></button>
+        <button class="btn btn-primary" id="btnOpenExport">Export</button>
+      </div>
+    </header>
+
+    <main class="studio-grid">
+      <!-- Left: Structure -->
+      <aside class="panel panel-left">
+        <section class="card">
+          <h3>Arah hadap</h3>
+          <div class="dir-grid" id="dirGrid">
+            <button class="dir-btn active" data-dir="front"><span>⬆️</span>Depan</button>
+            <button class="dir-btn" data-dir="side_right"><span>➡️</span>Kanan</button>
+            <button class="dir-btn" data-dir="side_left"><span>⬅️</span>Kiri</button>
+            <button class="dir-btn" data-dir="back"><span>⬇️</span>Belakang</button>
+          </div>
+          <button class="btn btn-primary btn-block" id="btnSmartAutoPivot">🎯 Auto Pasang Pivot</button>
+          <div class="btn-row">
+            <button class="btn btn-ghost btn-sm" id="btnUndoRig" title="Undo (Ctrl+Z)">↩ Undo</button>
+            <button class="btn btn-ghost btn-sm" id="btnSaveRig">Simpan</button>
+            <label class="btn btn-ghost btn-sm" for="rigFileInput">Muat</label>
+            <input type="file" id="rigFileInput" accept="application/json" hidden />
+          </div>
+          <div class="dropzone" id="dropzone">Tarik gambar ke sini</div>
+        </section>
+
+        <section class="card">
+          <h3>Pivot: <span id="lblSelectedPivot" class="accent-text">pilih pin</span></h3>
+          <div class="nudge-pad">
+            <span></span>
+            <button class="btn btn-secondary btn-sm" id="btnNudgeUp" title="Atas">▲</button>
+            <span></span>
+            <button class="btn btn-secondary btn-sm" id="btnNudgeLeft" title="Kiri">◀</button>
+            <button class="btn btn-secondary btn-sm" id="btnNudgeDown" title="Bawah">▼</button>
+            <button class="btn btn-secondary btn-sm" id="btnNudgeRight" title="Kanan">▶</button>
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span>Sudut sendi</span><span id="valCustomAngle">0°</span></div>
+            <input type="range" id="rngCustomAngle" min="-90" max="90" step="1" value="0" />
+          </div>
+          <label class="toggle-label"><input type="checkbox" id="chkMirror" /><span>Mirror kiri/kanan</span></label>
+          <label class="toggle-label"><input type="checkbox" id="chkLockCutMask" /><span>Kunci potongan</span></label>
+        </section>
+
+        <section class="card">
+          <h3>Bagian tubuh</h3>
+          <button class="btn btn-accent btn-block" id="btnToggleExplode">✂️ Pisahkan bagian</button>
+          <div class="slider-group">
+            <div class="slider-header"><span>Jarak pisah</span><span id="valExplode">0%</span></div>
+            <input type="range" id="rngExplode" min="0" max="100" value="0" />
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-sm active" id="btnToolPivot">✋ Pivot</button>
+            <button class="btn btn-secondary btn-sm" id="btnToolBrush">🖌️ Kuas</button>
+          </div>
+          <div id="brushControls" class="hidden">
+            <div class="slider-group">
+              <div class="slider-header"><span>Ukuran kuas</span><span id="valBrushSize">10px</span></div>
+              <input type="range" id="rngBrushSize" min="3" max="28" value="10" />
+            </div>
+            <label class="toggle-label"><input type="checkbox" id="chkShowPartMask" /><span>Tampilkan warna area</span></label>
+          </div>
+          <div class="part-list" id="partList"></div>
+        </section>
+
+        <details class="card adv">
+          <summary>Lanjutan</summary>
+          <div class="field-group">
+            <label for="selRenderMode">Metode</label>
+            <select id="selRenderMode">
+              <option value="hybrid_mesh">Mesh halus (anti-patah)</option>
+              <option value="cutout_layers">Potongan layer</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="selTemplate">Template rig</label>
+            <select id="selTemplate">
+              <option value="auto_smart">Auto (scan siluet)</option>
+              <option value="front_aetheria">Depan — Hero Aetheria</option>
+              <option value="humanoid_front">Depan — Standar</option>
+              <option value="knight_34">Kanan 3/4 — Ksatria</option>
+              <option value="side_left_34">Kiri 3/4 — Hero</option>
+              <option value="back_rpg">Belakang — RPG</option>
+              <option value="creature_simple">Boss / Duduk / Monster</option>
+            </select>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Center -->
+      <section class="viewport-wrap">
+        <div class="viewport-stage bg-checker" id="viewportStage">
+          <canvas id="glCanvas" class="stage-canvas"></canvas>
+          <canvas id="overlayCanvas" class="stage-canvas"></canvas>
+          <canvas id="playBgCanvas" class="stage-canvas hidden"></canvas>
+          <div id="multiGridView" class="multi-grid-view hidden"></div>
+
+          <div class="viewport-hint" id="viewportHint">Tarik pin bulat untuk atur pivot</div>
+
+          <div class="backdrop-switcher" id="backdropSwitcher" title="Latar preview">
+            <button class="bg-swatch active" data-bg="bg-checker" style="background: repeating-conic-gradient(#1e293b 0% 25%, #0f172a 0% 50%) 50% / 10px 10px;" title="Transparan"></button>
+            <button class="bg-swatch" data-bg="bg-dark" style="background: #0f172a;" title="Gelap"></button>
+            <button class="bg-swatch" data-bg="bg-grass" style="background: linear-gradient(180deg,#1e3a5f 50%,#1e3f2e 50%);" title="Arena"></button>
+            <button class="bg-swatch" data-bg="bg-light" style="background: #e2e8f0;" title="Terang"></button>
+          </div>
+
+          <div class="playtest-controls hidden" id="playtestControls">
+            <button class="btn btn-secondary btn-sm" data-play-action="attack">⚔️ J</button>
+            <button class="btn btn-secondary btn-sm" data-play-action="cast">✨ K</button>
+            <button class="btn btn-secondary btn-sm" data-play-action="dash">💨 L</button>
+            <button class="btn btn-secondary btn-sm" data-play-action="block">🛡️ B</button>
+            <button class="btn btn-secondary btn-sm" data-play-action="hurt">💥 H</button>
+            <button class="btn btn-secondary btn-sm" data-play-action="victory">🎉 V</button>
+          </div>
+        </div>
+
+        <div class="timeline-bar" id="timelineBar">
+          <button class="btn btn-primary btn-sm" id="btnPlayPause">⏸ Pause</button>
+          <div class="timeline-scrubber">
+            <input type="range" id="rngTimeline" min="0" max="1000" value="0" />
+          </div>
+          <span class="timeline-info" id="lblFrameInfo">1 / 8</span>
+        </div>
+      </section>
+
+      <!-- Right: Animation -->
+      <aside class="panel panel-right">
+        <section class="card">
+          <h3>Gerakan</h3>
+          <div class="anim-grid" id="animGrid"></div>
+        </section>
+
+        <section class="card">
+          <h3>Pengaturan</h3>
+          <div class="slider-group">
+            <div class="slider-header"><span>Kecepatan</span><span id="valSpeed">1.00x</span></div>
+            <input type="range" id="rngSpeed" min="0.2" max="2.5" step="0.05" value="1.0" />
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span>Intensitas</span><span id="valIntensity">100%</span></div>
+            <input type="range" id="rngIntensity" min="0.2" max="1.6" step="0.05" value="1.0" />
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span>Squash</span><span id="valSquash">100%</span></div>
+            <input type="range" id="rngSquash" min="0" max="2.0" step="0.05" value="1.0" />
+          </div>
+          <div class="slider-group">
+            <div class="slider-header"><span>Zoom</span><span id="valZoom">115%</span></div>
+            <input type="range" id="rngZoom" min="0.5" max="2.4" step="0.05" value="1.15" />
+          </div>
+          <div class="chip-grid">
+            <label class="toggle-label"><input type="checkbox" id="chkShowSkeleton" checked /><span>Pin pivot</span></label>
+            <label class="toggle-label"><input type="checkbox" id="chkShowHitboxes" /><span>Hitbox</span></label>
+            <label class="toggle-label"><input type="checkbox" id="chkFlipX" /><span>Flip</span></label>
+            <label class="toggle-label"><input type="checkbox" id="chkPixelArt" /><span>Pixel art</span></label>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3>Background</h3>
+          <label class="toggle-label"><input type="checkbox" id="chkRemoveBg" /><span>Hapus otomatis</span></label>
+          <div class="slider-group" id="bgToleranceGroup" style="margin-top:8px">
+            <div class="slider-header"><span>Toleransi</span><span id="valBgTol">30</span></div>
+            <input type="range" id="rngBgTol" min="5" max="95" value="30" />
+          </div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Export Modal -->
+  <div class="modal-backdrop hidden" id="exportModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Export</h2>
+        <button class="btn-icon" id="btnCloseExport">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field-group">
+            <label for="inpCharName">Nama file</label>
+            <input type="text" id="inpCharName" value="aetheria_sven" />
+          </div>
+          <div class="field-group">
+            <label for="selDirectionMode">Arah</label>
+            <select id="selDirectionMode">
+              <option value="single">1 arah (aktif)</option>
+              <option value="dual">2 arah (kanan + kiri)</option>
+              <option value="four_way">4 arah (depan, kanan, kiri, belakang)</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="selExportScope">Animasi</label>
+            <select id="selExportScope">
+              <option value="current">Yang aktif</option>
+              <option value="core">Inti (idle, walk, run, jump, attack)</option>
+              <option value="all">Semua</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="selFrameSize">Ukuran frame</label>
+            <select id="selFrameSize">
+              <option value="64">64 px</option>
+              <option value="128">128 px</option>
+              <option value="256" selected>256 px</option>
+              <option value="384">384 px</option>
+              <option value="512">512 px</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="selFrameCount">Frame / animasi</label>
+            <select id="selFrameCount">
+              <option value="4">4</option>
+              <option value="6">6</option>
+              <option value="8" selected>8</option>
+              <option value="12">12</option>
+              <option value="16">16</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="selEngineFormat">Format kode</label>
+            <select id="selEngineFormat">
+              <option value="phaser">Phaser / Canvas</option>
+              <option value="godot">Godot 4</option>
+              <option value="unity">Unity</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="export-preview-wrap">
+          <div class="export-preview-header"><span>Preview</span><span id="lblSheetDims">—</span></div>
+          <div class="export-preview-box"><canvas id="exportPreviewCanvas"></canvas></div>
+        </div>
+
+        <details class="code-snippet-wrap">
+          <summary>Kode integrasi</summary>
+          <div class="export-preview-header" style="margin-top:8px">
+            <span></span>
+            <button class="btn btn-secondary btn-sm" id="btnCopyCode">Copy</button>
+          </div>
+          <pre id="preCodeSnippet" class="code-box"></pre>
+        </details>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnDownloadWebm">🎬 WebM</button>
+        <div class="footer-right">
+          <button class="btn btn-secondary" id="btnDownloadJson">JSON</button>
+          <button class="btn btn-primary" id="btnDownloadPng">PNG Sheet</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AutoSprite Cloud Modal -->
+  <div class="modal-backdrop hidden" id="cloudModal">
+    <div class="modal-card">
+      <div class="modal-header"><h2>☁ AutoSprite AI</h2><button class="btn-icon" id="btnCloseCloud">✕</button></div>
+      <div class="modal-body cloud-body">
+        <div class="cloud-step">
+          <h3>1. Akun</h3>
+          <div class="btn-row">
+            <input type="password" id="inpApiKey" placeholder="vspk_..." autocomplete="off" />
+            <button class="btn btn-secondary btn-sm" id="btnCheckCredits" style="flex:0 0 auto">Cek saldo</button>
+          </div>
+          <div class="muted" id="lblCloudInfo">Key tersimpan hanya di browser ini.</div>
+        </div>
+        <div class="cloud-step">
+          <h3>2. Karakter <span class="muted">(upload gratis)</span></h3>
+          <label class="toggle-label"><input type="checkbox" id="chkHumanoid" checked /><span>Humanoid</span></label>
+          <button class="btn btn-primary btn-block" id="btnCloudUpload">Upload sprite aktif</button>
+          <div class="muted" id="lblCloudChar"></div>
+        </div>
+        <div class="cloud-step">
+          <h3>3. Animasi AI <span class="muted">(pakai kredit)</span></h3>
+          <div class="chip-grid cols3" id="cloudKinds"></div>
+          <div class="field-row" style="margin-top:6px">
+            <div class="field-group"><label for="inpExtraKind">Animasi lain (pisah koma)</label><input type="text" id="inpExtraKind" placeholder="cast, hurt" /></div>
+            <div class="field-group"><label for="selTier">Kualitas</label>
+              <select id="selTier"><option value="turbo">Turbo — 5/anim (hemat)</option><option value="pro">Pro — 15/anim</option><option value="max">Max — 35/anim</option></select></div>
+          </div>
+          <div class="estimate" id="lblEstimate"></div>
+          <button class="btn btn-accent btn-block" id="btnCloudGenerate" disabled>Generate</button>
+          <div class="cloud-links" id="cloudLinks"></div>
+          <pre class="code-box" id="cloudLog"></pre>
+        </div>
+        <div class="muted tips">💡 Hemat: pakai Turbo, pilih animasi seperlunya, test dulu di editor offline (gratis). Upload karakter tidak memakai kredit.</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

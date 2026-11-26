@@ -1,0 +1,8 @@
+{
+  "name": "auto-skeleton",
+  "version": "1.0.0",
+  "description": "Offline 2D Character Auto-Rigging & Sprite Sheet Animator",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
