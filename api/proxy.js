@@ -1,8 +1,13 @@
 const https = require('https');
 
 module.exports = (req, res) => {
-  const pathAfter = (req.url || '').replace(/^\/api\/as/, '') || '/';
-  const target = new URL('https://www.autosprite.io/api/v1' + pathAfter);
+  const urlObj = new URL(req.url, 'http://localhost');
+  const rawPath = urlObj.searchParams.get('path') || '';
+  const cleanPath = '/' + rawPath.replace(/^\/+/, '');
+  urlObj.searchParams.delete('path');
+  const qs = urlObj.searchParams.toString();
+  const target = new URL('https://www.autosprite.io/api/v1' + cleanPath + (qs ? '?' + qs : ''));
+
   const headers = { ...req.headers, host: target.host };
   delete headers.origin;
   delete headers.referer;

@@ -18,4 +18,6 @@ html = html.replace(/<link\s+rel="stylesheet"\s+href="\.\/styles\.css"\s*\/?>/i,
 html = html.replace(/<script\s+type="module"\s+src="\.\/src\/main\.js"><\/script>/i, () => "<script>\n" + js + "\n</script>");
 fs.writeFileSync("AutoSkeleton.html", html);
 fs.writeFileSync("index.html", html);
+fs.mkdirSync("public", { recursive: true });
+fs.writeFileSync("public/index.html", html);
 console.log("OK", html.length);
